@@ -7,25 +7,8 @@
 
 #include "config.h"
 #include "parser.h"
-
-static char *readtoend(char *path, char *modes)
-{
-    FILE *f = fopen(path, modes);
-    if (f == NULL)
-    {
-        return NULL;
-    }
-    fseek(f, 0, SEEK_END);
-    long fsize = ftell(f);
-    fseek(f, 0, SEEK_SET); /* same as rewind(f); */
-
-    char *string = malloc(fsize + 1);
-    fread(string, 1, fsize, f);
-    fclose(f);
-
-    string[fsize] = 0;
-    return string;
-}
+#include "cio.h"
+#include "log.h"
 
 static int parseStrArray(cJSON *json, char *path, char ***strs)
 {
@@ -37,7 +20,7 @@ static int parseStrArray(cJSON *json, char *path, char ***strs)
     }
     if (!cJSON_IsArray(arrayJson))
     {
-        printf("%s is not array: %s\n", path, cJSON_Print(arrayJson));
+        logError("%s is not array: %s", path, cJSON_Print(arrayJson));
         return -1;
     }
     *strs = (char **)calloc(n, sizeof(char *));
@@ -47,7 +30,7 @@ static int parseStrArray(cJSON *json, char *path, char ***strs)
     {
         if (!cJSON_IsString(itemJson))
         {
-            printf("item is not string: %s\n", cJSON_Print(itemJson));
+            logError("item is not string: %s", cJSON_Print(itemJson));
             return -1;
         }
         (*strs)[i++] = itemJson->valuestring;
@@ -91,7 +74,7 @@ static userConfig *parseUser(cJSON *json, char *path)
     cJSON *userJson = cJSON_GetObjectItemCaseSensitive(json, path);
     if (!cJSON_IsObject(userJson))
     {
-        printf("%s is not obj: %s\n", path, cJSON_Print(userJson));
+        logError("%s is not obj: %s", path, cJSON_Print(userJson));
         return NULL;
     }
     userConfig *user = (userConfig *)calloc(1, sizeof(userConfig));
@@ -105,7 +88,7 @@ static processConfig *parseProcess(cJSON *json, char *path)
     cJSON *processJson = cJSON_GetObjectItemCaseSensitive(json, path);
     if (!cJSON_IsObject(processJson))
     {
-        printf("%s is not obj: %s\n", path, cJSON_Print(processJson));
+        logError("%s is not obj: %s", path, cJSON_Print(processJson));
         return NULL;
     }
 
@@ -127,7 +110,7 @@ static rootConfig *parseRoot(cJSON *json, char *path)
     cJSON *rootJson = cJSON_GetObjectItemCaseSensitive(json, path);
     if (!cJSON_IsObject(rootJson))
     {
-        printf("%s is not obj: %s\n", path, cJSON_Print(rootJson));
+        logError("%s is not obj: %s", path, cJSON_Print(rootJson));
         return NULL;
     }
 
@@ -155,7 +138,7 @@ static int parseMount(cJSON *json, mountConfig *mount)
     mount->optionsLen = parseStrArray(json, "options", &mount->options);
     if (mount->destination == NULL)
     {
-        printf("destination is not string: %s\n", cJSON_Print(json));
+        logError("destination is not string: %s", cJSON_Print(json));
         return -1;
     }
     return 0;
@@ -167,12 +150,12 @@ static int parseMountArray(cJSON *json, char *path, mountConfig **mounts)
     int n = cJSON_GetArraySize(arrayJson);
     if (cJSON_IsNull(arrayJson) || !n)
     {
-        printf("%s is empty\n", path);
+        logError("%s is empty", path);
         return 0;
     }
     if (!cJSON_IsArray(arrayJson))
     {
-        printf("%s is not array: %s\n", path, cJSON_Print(arrayJson));
+        logError("%s is not array: %s", path, cJSON_Print(arrayJson));
         return -1;
     }
     *mounts = (mountConfig *)calloc(n, sizeof(mountConfig));
@@ -182,12 +165,12 @@ static int parseMountArray(cJSON *json, char *path, mountConfig **mounts)
     {
         if (!cJSON_IsObject(itemJson))
         {
-            printf("item is not object: %s\n", cJSON_Print(itemJson));
+            logError("item is not object: %s", cJSON_Print(itemJson));
             return -1;
         }
         if (parseMount(itemJson, mount) < 0)
         {
-            printf("item parse fail: %s\n", cJSON_Print(itemJson));
+            logError("item parse fail: %s", cJSON_Print(itemJson));
             return -1;
         }
         mount++;
@@ -201,7 +184,7 @@ static int parseNamespace(cJSON *json, namespaceConfig *namespace)
     namespace->type = parseStr(json, "type");
     if (namespace->type == NULL)
     {
-        printf("type is not string: %s\n", cJSON_Print(json));
+        logError("type is not string: %s", cJSON_Print(json));
         return -1;
     }
     return 0;
@@ -213,12 +196,12 @@ static int parseNamespaceArray(cJSON *json, char *path, namespaceConfig **namesp
     int n = cJSON_GetArraySize(arrayJson);
     if (cJSON_IsNull(arrayJson) || !n)
     {
-        printf("%s is empty\n", path);
+        logError("%s is empty", path);
         return 0;
     }
     if (!cJSON_IsArray(arrayJson))
     {
-        printf("%s is not array: %s\n", path, cJSON_Print(arrayJson));
+        logError("%s is not array: %s", path, cJSON_Print(arrayJson));
         return -1;
     }
     *namespaces = (namespaceConfig *)calloc(n, sizeof(namespaceConfig));
@@ -228,12 +211,12 @@ static int parseNamespaceArray(cJSON *json, char *path, namespaceConfig **namesp
     {
         if (!cJSON_IsObject(itemJson))
         {
-            printf("item is not object: %s\n", cJSON_Print(itemJson));
+            logError("item is not object: %s", cJSON_Print(itemJson));
             return -1;
         }
         if (parseNamespace(itemJson, namespace) < 0)
         {
-            printf("item parse fail: %s\n", cJSON_Print(itemJson));
+            logError("item parse fail: %s", cJSON_Print(itemJson));
             return -1;
         }
         namespace ++;
@@ -256,12 +239,12 @@ static int parseIdMappingArray(cJSON *json, char *path, idMappingConfig **idMapp
     int n = cJSON_GetArraySize(arrayJson);
     if (cJSON_IsNull(arrayJson) || !n)
     {
-        printf("%s is empty\n", path);
+        logError("%s is empty", path);
         return 0;
     }
     if (!cJSON_IsArray(arrayJson))
     {
-        printf("%s is not array: %s\n", path, cJSON_Print(arrayJson));
+        logError("%s is not array: %s", path, cJSON_Print(arrayJson));
         return -1;
     }
     *idMappings = (idMappingConfig *)calloc(n, sizeof(idMappingConfig));
@@ -271,12 +254,12 @@ static int parseIdMappingArray(cJSON *json, char *path, idMappingConfig **idMapp
     {
         if (!cJSON_IsObject(itemJson))
         {
-            printf("item is not object: %s\n", cJSON_Print(itemJson));
+            logError("item is not object: %s", cJSON_Print(itemJson));
             return -1;
         }
         if (parseIdMapping(itemJson, idMapping) < 0)
         {
-            printf("item parse fail: %s\n", cJSON_Print(itemJson));
+            logError("item parse fail: %s", cJSON_Print(itemJson));
             return -1;
         }
         idMapping++;
@@ -290,13 +273,13 @@ static resourceConfig *parseResource(cJSON *json, char *path)
     cJSON *resourceJson = cJSON_GetObjectItemCaseSensitive(json, path);
     if (!cJSON_IsObject(resourceJson))
     {
-        fprintf(stderr, "%s is not object: %s\n", path, cJSON_Print(json));
+        logError("%s is not object: %s", path, cJSON_Print(json));
         return NULL;
     }
     cJSON *cpuJson = cJSON_GetObjectItemCaseSensitive(resourceJson, "cpu");
     if (!cJSON_IsObject(cpuJson))
     {
-        fprintf(stderr, "%s is not object: %s\n", "cpu", cJSON_Print(resourceJson));
+        logError("%s is not object: %s", "cpu", cJSON_Print(resourceJson));
         return NULL;
     }
     resourceConfig *resource = (resourceConfig *)malloc(sizeof(resourceConfig));
@@ -312,7 +295,7 @@ static linuxConfig *parseLinux(cJSON *json, char *path)
     cJSON *linuxJson = cJSON_GetObjectItemCaseSensitive(json, path);
     if (!cJSON_IsObject(linuxJson))
     {
-        printf("%s is not obj: %s\n", path, cJSON_Print(linuxJson));
+        logError("%s is not obj: %s", path, cJSON_Print(linuxJson));
         return NULL;
     }
     linuxConfig *Linux = (linuxConfig *)calloc(1, sizeof(linuxConfig));
@@ -335,7 +318,7 @@ containerConfig *parse()
     char *string = readtoend("config.json", "rb");
     if (string == NULL)
     {
-        fprintf(stderr, "read config error: %s\n", strerror(errno));
+        logError("read config error");
         return NULL;
     }
     cJSON *rootJson = cJSON_Parse(string);
@@ -344,7 +327,7 @@ containerConfig *parse()
     containerConfig *config = (containerConfig *)calloc(1, sizeof(containerConfig));
     if (!cJSON_IsObject(rootJson))
     {
-        printf("root is not obj: %s\n", cJSON_Print(rootJson));
+        logError("root is not obj: %s", cJSON_Print(rootJson));
         goto ERROR;
     }
     if ((config->process = parseProcess(rootJson, "process")) == NULL)
@@ -357,7 +340,7 @@ containerConfig *parse()
     }
     if ((config->hostname = parseStr(rootJson, "hostname")) == NULL)
     {
-        printf("hostname is not string: %s\n", cJSON_Print(rootJson));
+        logError("hostname is not string: %s", cJSON_Print(rootJson));
         goto ERROR;
     }
     if ((config->mountslen = parseMountArray(rootJson, "mounts", &config->mounts)) < 0)

@@ -1,6 +1,10 @@
 #ifndef __CONFIG_H
 #define __CONFIG_H
 
+#define PARENTOK 1
+#define CREATERUNTIME 2
+#define CREATERUNTIMERESP 3
+
 typedef struct userConfig
 {
     int uid;

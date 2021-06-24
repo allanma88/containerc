@@ -5,6 +5,7 @@
 
 #include "run.h"
 #include "help.h"
+#include "log.h"
 
 int main(int argc, char **argv)
 {
@@ -33,7 +34,7 @@ int main(int argc, char **argv)
     }
     else
     {
-        fprintf(stderr, "unkown command: %s\n", argv[1]);
+        logError("unkown command: %s", argv[1]);
     }
     return 0;
 }

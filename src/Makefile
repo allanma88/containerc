@@ -1,4 +1,4 @@
-objects = help.o config.o cust_dir.o print.o parser.o child.o parent.o run.o main.o
+objects = help.o config.o cust_dir.o print.o cio.o log.o parser.o child.o parent.o run.o main.o
 ctrc : $(objects)
 	cc $(objects) -o ctrc -lcjson
 
@@ -28,7 +28,13 @@ parser.o: parser.c
 
 print.o: print.c
 	cc -c -g print.c
+
+cio.o: cio.c
+	cc -c -g cio.c
 	
+log.o: log.c
+	cc -c -g log.c
+
 clean :
 	rm *.o
 	rm ctrc

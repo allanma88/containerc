@@ -5,19 +5,63 @@
 #include <stdint.h>
 #include <errno.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <fcntl.h>
 #include <string.h>
+#include <sys/wait.h>
+#include <sys/socket.h>
 
 #include "cust_dir.h"
 #include "config.h"
 #include "parent.h"
+#include "child.h"
+#include "cio.h"
+#include "log.h"
 
-static int update_map(idMappingConfig *idMappings, int idMappingLen, char *map_file)
+static int computeCloneFlags(linuxConfig *Linux)
+{
+    int cloneFlags = 0;
+    for (int i = 0; i < Linux->namespaceLen; i++)
+    {
+        namespaceConfig namespace = Linux->namespaces[i];
+        if (!strncmp(namespace.type, "pid", 3))
+        {
+            cloneFlags |= CLONE_NEWPID;
+        }
+        else if (!strncmp(namespace.type, "ipc", 3))
+        {
+            cloneFlags |= CLONE_NEWIPC;
+        }
+        else if (!strncmp(namespace.type, "uts", 3))
+        {
+            cloneFlags |= CLONE_NEWUTS;
+        }
+        else if (!strncmp(namespace.type, "mount", 5))
+        {
+            cloneFlags |= CLONE_NEWNS;
+        }
+        else if (!strncmp(namespace.type, "user", 4))
+        {
+            cloneFlags |= CLONE_NEWUSER;
+        }
+        else if (!strncmp(namespace.type, "cgroup", 6))
+        {
+            cloneFlags |= CLONE_NEWCGROUP;
+        }
+        else if (!strncmp(namespace.type, "network", 7))
+        {
+            cloneFlags |= CLONE_NEWNET;
+        }
+    }
+    return cloneFlags;
+}
+
+static int updateIdMap(idMappingConfig *idMappings, int idMappingLen, char *map_file)
 {
     int fd = open(map_file, O_RDWR);
     if (fd == -1)
     {
-        fprintf(stderr, "ERROR: open %s: %s\n", map_file, strerror(errno));
+        logError("open %s error", map_file);
         return -1;
     }
 
@@ -41,17 +85,16 @@ static int update_map(idMappingConfig *idMappings, int idMappingLen, char *map_f
         n += nums[i];
         idMapping++;
     }
-    printf("write '%s' to %s\n", mapping, map_file);
     if (write(fd, mapping, len) != len)
     {
-        fprintf(stderr, "ERROR: write to %s: %s\n", map_file, strerror(errno));
+        logError("write to %s error", map_file);
         return -1;
     }
     close(fd);
     return 0;
 }
 
-static int proc_setgroups_write(pid_t child_pid, char *str)
+static int updateSetgroups(pid_t child_pid, char *str)
 {
     char setgroups_path[PATH_MAX];
     int fd;
@@ -59,7 +102,7 @@ static int proc_setgroups_write(pid_t child_pid, char *str)
     snprintf(setgroups_path, PATH_MAX, "/proc/%jd/setgroups", (intmax_t)child_pid);
 
     fd = open(setgroups_path, O_RDWR);
-    if (fd == -1)
+    if (fd == -1 && errno != ENOENT)
     {
         /* We may be on a system that doesn't support
         /proc/PID/setgroups. In that case, the file won't exist,
@@ -70,13 +113,15 @@ static int proc_setgroups_write(pid_t child_pid, char *str)
         However, if the error from open() was something other than
         the ENOENT error that is expected for that case,  let the
         user know. */
-        if (errno != ENOENT)
-            fprintf(stderr, "ERROR: open %s: %s\n", setgroups_path, strerror(errno));
+        logError("open %s error", setgroups_path);
         return -1;
     }
 
     if (write(fd, str, strlen(str)) == -1)
-        fprintf(stderr, "ERROR: write %s: %s\n", setgroups_path, strerror(errno));
+    {
+        logError("write %s error", setgroups_path);
+        return -1;
+    }
 
     close(fd);
     return 0;
@@ -89,28 +134,24 @@ static int runUserNamespace(int childPid, containerConfig *config)
     if (Linux->uidMappingsLen > 0)
     {
         snprintf(map_path, PATH_MAX, "/proc/%jd/uid_map", (intmax_t)childPid);
-        update_map(Linux->uidMappings, Linux->uidMappingsLen, map_path);
+        if(updateIdMap(Linux->uidMappings, Linux->uidMappingsLen, map_path) < 0)
+        {
+            return -1;
+        }
     }
     if (Linux->gidMappingsLen > 0)
     {
-        proc_setgroups_write(childPid, "deny");
+        if(updateSetgroups(childPid, "deny") < 0)
+        {
+            return -1;
+        }
         snprintf(map_path, PATH_MAX, "/proc/%jd/gid_map", (intmax_t)childPid);
-        update_map(Linux->gidMappings, Linux->gidMappingsLen, map_path);
+        if(updateIdMap(Linux->gidMappings, Linux->gidMappingsLen, map_path) < 0)
+        {
+            return -1;
+        }
     }
-}
-
-static int writeInt(char *path, int i)
-{
-    //need error handler
-    int fd = open(path, O_RDWR);
-    if (fd < 0)
-    {
-        return -1;
-    }
-    int len = snprintf(NULL, 0, "%d", i);
-    char str[len + 1];
-    sprintf(str, "%d", i);
-    return write(fd, str, len);
+    return 0;
 }
 
 static int runCgroupNamespace(int childPid, linuxConfig *Linux)
@@ -125,7 +166,8 @@ static int runCgroupNamespace(int childPid, linuxConfig *Linux)
     sprintf(cgroupsFullPath, "%s%s", cgroupsRootPath, cgroupsPath);
     if (mkdirRecur(cgroupsFullPath) < 0)
     {
-        fprintf(stderr, "mkdirRecur %s error: %s\n", cgroupsFullPath, strerror(errno));
+        logError("mkdirRecur %s error", cgroupsFullPath);
+        return -1;
     }
 
     char *cpuShares = "cpu.shares";
@@ -133,7 +175,8 @@ static int runCgroupNamespace(int childPid, linuxConfig *Linux)
     sprintf(cpuSharesFilePath, "%s/%s", cgroupsFullPath, cpuShares);
     if (writeInt(cpuSharesFilePath, cpu->shares) < 0)
     {
-        fprintf(stderr, "write %d to %s error: %s\n", cpu->shares, cpuSharesFilePath, strerror(errno));
+        logError("write %d to %s error", cpu->shares, cpuSharesFilePath);
+        return -1;
     }
 
     char *cpuPeriod = "cpu.cfs_period_us";
@@ -141,7 +184,8 @@ static int runCgroupNamespace(int childPid, linuxConfig *Linux)
     sprintf(cpuPeriodFilePath, "%s/%s", cgroupsFullPath, cpuPeriod);
     if (writeInt(cpuPeriodFilePath, cpu->period) < 0)
     {
-        fprintf(stderr, "write %d to %s error: %s\n", cpu->period, cpuPeriodFilePath, strerror(errno));
+        logError("write %d to %s error", cpu->period, cpuPeriodFilePath);
+        return -1;
     }
 
     char *cpuQuota = "cpu.cfs_quota_us";
@@ -149,7 +193,8 @@ static int runCgroupNamespace(int childPid, linuxConfig *Linux)
     sprintf(cpuQuotaFilePath, "%s/%s", cgroupsFullPath, cpuQuota);
     if (writeInt(cpuQuotaFilePath, cpu->quota) < 0)
     {
-        fprintf(stderr, "write %d to %s error: %s\n", cpu->quota, cpuQuotaFilePath, strerror(errno));
+        logError("write %d to %s error", cpu->quota, cpuQuotaFilePath);
+        return -1;
     }
 
     char *tasks = "tasks";
@@ -157,7 +202,8 @@ static int runCgroupNamespace(int childPid, linuxConfig *Linux)
     sprintf(tasksFilePath, "%s/%s", cgroupsFullPath, tasks);
     if (writeInt(tasksFilePath, childPid) < 0)
     {
-        fprintf(stderr, "write %d to %s error: %s\n", childPid, tasksFilePath, strerror(errno));
+        logError("write %d to %s error", childPid, tasksFilePath);
+        return -1;
     }
 
     char *cgroupProcs = "cgroup.procs";
@@ -165,19 +211,87 @@ static int runCgroupNamespace(int childPid, linuxConfig *Linux)
     sprintf(cgroupProcsFilePath, "%s/%s", cgroupsFullPath, cgroupProcs);
     if (writeInt(cgroupProcsFilePath, childPid) < 0)
     {
-        fprintf(stderr, "write %d to %s error: %s\n", childPid, cgroupProcsFilePath, strerror(errno));
+        logError("write %d to %s error", childPid, cgroupProcsFilePath);
+        return -1;
     }
+    return 0;
 }
 
-int parentRun(int cloneFlags, int childPid, containerConfig *config)
+int parentRun(cloneArgs *cArgs)
 {
-    if (cloneFlags | CLONE_NEWUSER)
+    cArgs->cloneFlags = computeCloneFlags(cArgs->config->Linux);
+    if (socketpair(AF_LOCAL, SOCK_STREAM, 0, cArgs->sync_child_pipe) < 0)
     {
-        runUserNamespace(childPid, config);
+        logError("child pipe error");
+        return -1;
     }
-    if (cloneFlags | CLONE_NEWCGROUP)
+
+    if (socketpair(AF_LOCAL, SOCK_STREAM, 0, cArgs->sync_grandchild_pipe) < 0)
     {
-        runCgroupNamespace(childPid, config->Linux);
+        logError("grand child pipe error");
+        return -1;
+    }
+
+    int childPid = clone(childMain, child_stack + STACK_SIZE, (cArgs->cloneFlags & CLONE_NEWUSER) | SIGCHLD, cArgs);
+    if (childPid == -1)
+    {
+        logError("clone error");
+        return -1;
+    }
+
+    close(cArgs->sync_child_pipe[0]);
+
+    if (cArgs->cloneFlags | CLONE_NEWUSER)
+    {
+        if(runUserNamespace(childPid, cArgs->config) < 0)
+        {
+            return -1;
+        }
+    }
+    if (cArgs->cloneFlags | CLONE_NEWCGROUP)
+    {
+        if(runCgroupNamespace(childPid, cArgs->config->Linux) < 0)
+        {
+            return -1;
+        }
+    }
+
+    if (writeInt1(cArgs->sync_child_pipe[1], PARENTOK) < 0)
+    {
+        logError("parent write PARENTOK to sync_child_pipe error");
+        return -1;
+    }
+
+    int grandChildPid;
+    if ((grandChildPid = readInt1(cArgs->sync_child_pipe[1])) < 0)
+    {
+        logError("parent read grandChildPid from sync_child_pipe error");
+        return -1;
+    }
+    close(cArgs->sync_grandchild_pipe[0]);
+
+    int msg;
+    if ((msg = readInt1(cArgs->sync_grandchild_pipe[1])) != CREATERUNTIME)
+    {
+        logError("parent read %d from sync_grandchild_pipe is not CREATERUNTIME", msg);
+        return -1;
+    }
+
+    system("/mnt/d/OpenSource/containerc/src/nssetup.sh");
+
+    if (writeInt1(cArgs->sync_grandchild_pipe[1], CREATERUNTIMERESP) < 0)
+    {
+        logError("parent write CREATERUNTIMERESP to sync_grandchild_pipe error");
+        return -1;
+    }
+
+    close(cArgs->sync_child_pipe[1]);
+    close(cArgs->sync_grandchild_pipe[1]);
+
+    if (waitpid(childPid, NULL, 0) == -1)
+    {
+        logError("waitpid error");
+        return -1;
     }
     return 0;
 }

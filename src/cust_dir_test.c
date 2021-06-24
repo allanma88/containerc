@@ -12,7 +12,7 @@ int main()
     char *path = "./mycontainer/rootfs/dev/pts";
     if (mkdirRecur(path) < 0)
     {
-        fprintf(stderr, "mkdirRecur %s error: %s\n", path, strerror(errno));
+        printf("mkdirRecur %s error: %s\n", path, strerror(errno));
     }
     else
     {

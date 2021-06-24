@@ -33,7 +33,6 @@ int mkdirRecur(const char *path)
             *p = 0;
             if (mkdir(tmp, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH) < 0 && EEXIST != errno)
             {
-                fprintf(stderr, "mkdir %s error: %s\n", tmp, strerror(errno));
                 return -1;
             }
             *p = '/';
@@ -41,7 +40,6 @@ int mkdirRecur(const char *path)
     }
     if (mkdir(tmp, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH) < 0 && EEXIST != errno)
     {
-        fprintf(stderr, "mkdir %s error: %s\n", tmp, strerror(errno));
         return -1;
     }
     return 0;

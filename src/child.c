@@ -1,11 +1,11 @@
 #define _GNU_SOURCE
 #include <stdio.h>
-#include <errno.h>
 #include <sched.h>
 #include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <limits.h>
+#include <stdlib.h>
 #include <sys/stat.h>
 #include <sys/mount.h>
 #include <sys/syscall.h>
@@ -14,11 +14,10 @@
 #include "cust_dir.h"
 #include "config.h"
 #include "child.h"
+#include "cio.h"
+#include "log.h"
 
-#define STACK_SIZE (1024 * 1024) /* Stack size for cloned child */
-static char child_stack[STACK_SIZE];
-
-static unsigned long int computeMountFlags(char **options, int optionsLen)
+unsigned long int computeMountFlags(char **options, int optionsLen)
 {
     unsigned long int flags = 0;
     for (int i = 0; i < optionsLen; i++)
@@ -64,65 +63,79 @@ static int runMountNamespace(containerConfig *config)
         int mountFlags = computeMountFlags(mnt->options, mnt->optionsLen);
         if (mkdirRecur(mnt->destination) < 0)
         {
-            fprintf(stderr, "mkdirRecur %s error: %s\n", mnt->destination, strerror(errno));
+            logError("mkdirRecur %s error", mnt->destination);
+            return -1;
         }
         if (!strncmp(mnt->type, "cgroup", 5))
         {
             if (mount("tmpfs", mnt->destination, "tmpfs", MS_NOSUID | MS_NOEXEC | MS_RELATIME, "mode=755") < 0)
             {
-                fprintf(stderr, "mount tmpfs %s tmpfs error: %s\n", mnt->destination, strerror(errno));
+                logError("mount tmpfs %s tmpfs error", mnt->destination);
+                return -1;
             }
             int len = strlen(mnt->destination);
             char cpuPath[len + 5];
             sprintf(cpuPath, "%s/cpu", mnt->destination);
             if (mkdirRecur(cpuPath) < 0)
             {
-                fprintf(stderr, "mkdirRecur %s error: %s\n", cpuPath, strerror(errno));
+                logError("mkdirRecur %s error", cpuPath);
+                return -1;
             }
             if (mount(mnt->source, cpuPath, mnt->type, mountFlags, "cpu") < 0)
             {
-                fprintf(stderr, "mount %s %s %s error: %s\n", mnt->source, cpuPath, mnt->type, strerror(errno));
+                logError("mount %s %s %s error", mnt->source, cpuPath, mnt->type);
+                return -1;
             }
             char memoryPath[len + 7];
             sprintf(memoryPath, "%s/memory", mnt->destination);
             if (mkdirRecur(memoryPath) < 0)
             {
-                fprintf(stderr, "mkdirRecur %s error: %s\n", memoryPath, strerror(errno));
+                logError("mkdirRecur %s error", memoryPath);
+                return -1;
             }
             if (mount(mnt->source, memoryPath, mnt->type, mountFlags, "memory") < 0)
             {
-                fprintf(stderr, "mount %s %s %s error: %s\n", mnt->source, memoryPath, mnt->type, strerror(errno));
+                logError("mount %s %s %s error", mnt->source, memoryPath, mnt->type);
+                return -1;
             }
         }
         else
         {
             if (mount(mnt->source, mnt->destination, mnt->type, mountFlags, NULL) < 0)
             {
-                fprintf(stderr, "mount %s %s %s error: %s\n", mnt->source, mnt->destination, mnt->type, strerror(errno));
+                logError("mount %s %s %s error", mnt->source, mnt->destination, mnt->type);
+                return -1;
             }
         }
         mnt++;
     }
+    return 0;
 }
 
 static int runUser(userConfig *user)
 {
     if (setuid(user->uid) < 0)
     {
-        fprintf(stderr, "set uid error: %s\n", strerror(errno));
+        logError("set uid error");
+        return -1;
     }
     if (seteuid(user->uid) < 0)
     {
-        fprintf(stderr, "set euid error: %s\n", strerror(errno));
+        logError("set euid error");
+        return -1;
+
     }
     if (setgid(user->gid) < 0)
     {
-        fprintf(stderr, "set gid error: %s\n", strerror(errno));
+        logError("set gid error");
+        return -1;
     }
     if (setegid(user->gid) < 0)
     {
-        fprintf(stderr, "set egid error: %s\n", strerror(errno));
+        logError("set egid error");
+        return -1;
     }
+    return 0;
 }
 
 static int runProcess(processConfig *process)
@@ -131,12 +144,12 @@ static int runProcess(processConfig *process)
     //todo: change to absolute path of exe
     if (execve(process->args[0], process->args, process->env) < 0)
     {
-        fprintf(stderr, "execute %s in child error: %s\n", process->args[0], strerror(errno));
+        logError("execute %s in child error", process->args[0]);
         return -1;
     }
 }
 
-static int pivot_root(const char *new_root, const char *put_old)
+static int pivotRoot(const char *new_root, const char *put_old)
 {
     return syscall(SYS_pivot_root, new_root, put_old);
 }
@@ -149,8 +162,10 @@ static int runRoot(rootConfig *root)
     // sprintf(rootDir, "%s/%s", curDir, root->path);
     // if (chroot(rootDir) < 0)
     // {
-    //     fprintf(stderr, "chroot error: %s\n", strerror(errno));
+    //     logError("chroot error");
+    //     return -1;
     // }
+    // return 0;
 
     char *new_root = root->path;
     const char *put_old = "/oldrootfs";
@@ -160,95 +175,146 @@ static int runRoot(rootConfig *root)
               shared propagation (which would cause pivot_root() to
               return an error), and prevent propagation of mount
               events to the initial mount namespace. */
-
     if (mount(NULL, "/", NULL, MS_REC | MS_PRIVATE, NULL) == -1)
-        fprintf(stderr, "mount-MS_PRIVATE error: %s\n", strerror(errno));
+    {
+        logError("mount-MS_PRIVATE error");
+        return -1;
+    }
 
     /* Ensure that 'new_root' is a mount point. */
-
     if (mount(new_root, new_root, NULL, MS_BIND, NULL) == -1)
-        fprintf(stderr, "mount-MS_BIND error: %s\n", strerror(errno));
+    {
+        logError("mount-MS_BIND error");
+        return -1;
+    }
 
     /* Create directory to which old root will be pivoted. */
-
     snprintf(path, sizeof(path), "%s/%s", new_root, put_old);
     if (mkdir(path, 0777) == -1)
-        fprintf(stderr, "mkdir error: %s\n", strerror(errno));
+    {
+        logError("mkdir error");
+        return -1;
+    }
 
     /* And pivot the root filesystem. */
-
-    if (pivot_root(new_root, path) == -1)
-        fprintf(stderr, "pivot_root error: %s\n", strerror(errno));
+    if (pivotRoot(new_root, path) == -1)
+    {
+        logError("pivot_root error");
+        return -1;
+    }
 
     /* Switch the current working directory to "/". */
-
     if (chdir("/") == -1)
-        fprintf(stderr, "chdir error: %s\n", strerror(errno));
+    {
+        logError("chdir error");
+        return -1;
+    }
 
     /* Unmount old root and remove mount point. */
-
     if (umount2(put_old, MNT_DETACH) == -1)
-        fprintf(stderr, "umount2 error: %s\n", strerror(errno));
+    {
+        logError("umount2 error");
+        return -1;
+    }
     if (rmdir(put_old) == -1)
-        fprintf(stderr, "rmdir error: %s\n", strerror(errno));
+    {
+        logError("rmdir error");
+        return -1;
+    }
+    return 0;
 }
 
 int childChildMain(void *arg)
 {
-    struct cloneArgs *cloneArgs = (struct cloneArgs *)arg;
-    containerConfig *config = cloneArgs->config;
-    
+    cloneArgs *cArgs = (struct cloneArgs *)arg;
+    containerConfig *config = cArgs->config;
+
+    close(cArgs->sync_child_pipe[0]);
+    close(cArgs->sync_child_pipe[1]);
+    close(cArgs->sync_grandchild_pipe[1]);
+
+    if (cArgs->cloneFlags | CLONE_NEWNS)
+    {
+        if(runMountNamespace(config) < 0)
+        {
+            return -1;
+        }
+    }
+
     if (sethostname(config->hostname, strlen(config->hostname)) == -1)
     {
-        fprintf(stderr, "set hostname error: %s\n", strerror(errno));
+        logError("set hostname error");
+        return -1;
     }
 
-    runRoot(config->root);
-
-    runUser(config->process->user);
-
-    if (cloneArgs->cloneFlags | CLONE_NEWNS)
+    if (runRoot(config->root) < 0)
     {
-        runMountNamespace(config);
+        return -1;
     }
 
-    runProcess(config->process);
+    if(runUser(config->process->user) < 0)
+    {
+        return -1;
+    }
+
+    if (writeInt1(cArgs->sync_grandchild_pipe[0], CREATERUNTIME) < 0)
+    {
+        logError("grandchild write CREATERUNTIME to sync_grandchild_pipe[%d] error", cArgs->sync_grandchild_pipe[0]);
+        return -1;
+    }
+
+    int msg;
+    if ((msg = readInt1(cArgs->sync_grandchild_pipe[0])) != CREATERUNTIMERESP)
+    {
+        logError("grandchild read %d from sync_grandchild_pipe is not CREATERUNTIMERESP error", msg);
+        return -1;
+    }
+    close(cArgs->sync_grandchild_pipe[0]);
+
+    if(runProcess(config->process) < 0)
+    {
+        return -1;
+    }
 
     printf("child child done\n");
 }
 
 int childMain(void *arg)
 {
-    struct cloneArgs *cloneArgs = (struct cloneArgs *)arg;
-    containerConfig *config = cloneArgs->config;
-    char ch;
+    cloneArgs *cArgs = (cloneArgs *)arg;
+    containerConfig *config = cArgs->config;
+    int cloneFlags = cArgs->cloneFlags;
 
-    /* Wait until the parent has updated the UID and GID mappings.
-       See the comment in main(). We wait for end of file on a
-       pipe that will be closed by the parent process once it has
-       updated the mappings. */
+    close(cArgs->sync_child_pipe[1]);
 
-    /* Close our descriptor for the write end of the pipe so that we see EOF when parent closes its descriptor. */
-    close(cloneArgs->pipe_fd[1]);
-    if (read(cloneArgs->pipe_fd[0], &ch, 1) != 0)
+    int msg;
+    if ((msg = readInt1(cArgs->sync_child_pipe[0])) != PARENTOK)
     {
-        fprintf(stderr, "Failure in child: read from pipe returned != 0\n");
+        logError("child read %d from sync_child_pipe is not PARENTOK", msg);
         return -1;
     }
 
-    close(cloneArgs->pipe_fd[0]);
-
-    struct cloneArgs childCloneArgs = {.config = cloneArgs->config, .cloneFlags = cloneArgs->cloneFlags};
-    int childPid = clone(childChildMain, child_stack + STACK_SIZE, (cloneArgs->cloneFlags & ~CLONE_NEWUSER) | SIGCHLD, &childCloneArgs);
-    if (childPid == -1)
+    int grandChildPid = clone(childChildMain, child_stack + STACK_SIZE, (cloneFlags & ~CLONE_NEWUSER) | SIGCHLD, cArgs);
+    if (grandChildPid == -1)
     {
-        printf("clone error: %s\n", strerror(errno));
+        logError("clone error");
         return -1;
     }
 
-    if (waitpid(childPid, NULL, 0) == -1)
+    close(cArgs->sync_grandchild_pipe[0]);
+    close(cArgs->sync_grandchild_pipe[1]);
+
+    if (writeInt1(cArgs->sync_child_pipe[0], grandChildPid) < 0)
     {
-        printf("waitpid error: %s\n", strerror(errno));
+        logError("child write childPid=%d to sync_child_pipe error", grandChildPid);
+        return -1;
+    }
+
+    close(cArgs->sync_child_pipe[0]);
+
+    if (waitpid(grandChildPid, NULL, 0) < 0)
+    {
+        logError("waitpid error");
         return -1;
     }
 
