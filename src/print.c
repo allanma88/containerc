@@ -39,6 +39,16 @@ static void printMountsConfig(mountConfig *mounts, int mountsLen)
     }
 }
 
+static void printHooksConfig(hooksConfig *hooks)
+{
+    printf("================Hooks============\n");
+    printf("createRuntime: \n");
+    for (int i = 0; i < hooks->createRuntimeLen; i++)
+    {
+        printf("path=%s\n", hooks->createRuntime[i].path);
+    }
+}
+
 static void printIdMappingsConfig(idMappingConfig *idMappings, int idMappingsLen)
 {
     for (int i = 0; i < idMappingsLen; i++)
@@ -79,5 +89,6 @@ void printConfig(containerConfig *config)
     printRootConfig(config->root);
     printf("hostname: %s\n", config->hostname);
     printMountsConfig(config->mounts, config->mountslen);
+    printHooksConfig(config->hooks);
     printLinuxConfig(config->Linux);
 }

@@ -134,19 +134,19 @@ static int runUserNamespace(int childPid, containerConfig *config)
     if (Linux->uidMappingsLen > 0)
     {
         snprintf(map_path, PATH_MAX, "/proc/%jd/uid_map", (intmax_t)childPid);
-        if(updateIdMap(Linux->uidMappings, Linux->uidMappingsLen, map_path) < 0)
+        if (updateIdMap(Linux->uidMappings, Linux->uidMappingsLen, map_path) < 0)
         {
             return -1;
         }
     }
     if (Linux->gidMappingsLen > 0)
     {
-        if(updateSetgroups(childPid, "deny") < 0)
+        if (updateSetgroups(childPid, "deny") < 0)
         {
             return -1;
         }
         snprintf(map_path, PATH_MAX, "/proc/%jd/gid_map", (intmax_t)childPid);
-        if(updateIdMap(Linux->gidMappings, Linux->gidMappingsLen, map_path) < 0)
+        if (updateIdMap(Linux->gidMappings, Linux->gidMappingsLen, map_path) < 0)
         {
             return -1;
         }
@@ -243,14 +243,14 @@ int parentRun(cloneArgs *cArgs)
 
     if (cArgs->cloneFlags | CLONE_NEWUSER)
     {
-        if(runUserNamespace(childPid, cArgs->config) < 0)
+        if (runUserNamespace(childPid, cArgs->config) < 0)
         {
             return -1;
         }
     }
     if (cArgs->cloneFlags | CLONE_NEWCGROUP)
     {
-        if(runCgroupNamespace(childPid, cArgs->config->Linux) < 0)
+        if (runCgroupNamespace(childPid, cArgs->config->Linux) < 0)
         {
             return -1;
         }
@@ -277,7 +277,14 @@ int parentRun(cloneArgs *cArgs)
         return -1;
     }
 
-    system("/mnt/d/OpenSource/containerc/src/nssetup.sh");
+    hooksConfig *hooks = cArgs->config->hooks;
+    if (hooks != NULL && hooks->createRuntime != NULL)
+    {
+        for (int i = 0; i < hooks->createRuntimeLen; i++)
+        {
+            system(hooks->createRuntime[i].path);
+        }
+    }
 
     if (writeInt1(cArgs->sync_grandchild_pipe[1], CREATERUNTIMERESP) < 0)
     {

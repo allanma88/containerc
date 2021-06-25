@@ -66,6 +66,22 @@ typedef struct resourceConfig
     memoryConfig *memory;
 } resourceConfig;
 
+typedef struct hookConfig
+{
+    char *path;
+    char **args;
+    int argc;
+    char **env;
+    int envc;
+    int timeout;
+} hookConfig;
+
+typedef struct hooksConfig
+{
+    hookConfig *createRuntime;
+    int createRuntimeLen;
+} hooksConfig;
+
 typedef struct linuxConfig
 {
     namespaceConfig *namespaces;
@@ -86,6 +102,7 @@ typedef struct containerConfig
     char *hostname;
     mountConfig *mounts;
     int mountslen;
+    hooksConfig *hooks;
     linuxConfig *Linux;
 } containerConfig;
 

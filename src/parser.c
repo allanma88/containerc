@@ -178,6 +178,62 @@ static int parseMountArray(cJSON *json, char *path, mountConfig **mounts)
     return n;
 }
 
+static hooksConfig *parseHook(cJSON *json, hookConfig *hook)
+{
+      //TODO: error handler?
+    hook->path = parseStr(json, "path");
+    hook->argc = parseStrArray(json, "hostID", &hook->args);
+    hook->envc = parseStrArray(json, "size", &hook->env);
+    hook->timeout = parseInt(json, "timeout");
+    return 0;
+}
+
+static hooksConfig *parseHooks(cJSON *json, char *path)
+{
+    //TODO: error handler?
+    cJSON *hooksJson = cJSON_GetObjectItemCaseSensitive(json, path);
+    if (!cJSON_IsObject(hooksJson))
+    {
+        logError("%s is not object: %s", path, cJSON_Print(json));
+        return NULL;
+    }
+
+    cJSON *createRuntimeJson = cJSON_GetObjectItemCaseSensitive(hooksJson, "createRuntime");
+    int n = cJSON_GetArraySize(createRuntimeJson);
+    if (cJSON_IsNull(createRuntimeJson) || !n)
+    {
+        logError("createRuntime is empty");
+        return NULL;
+    }
+    if (!cJSON_IsArray(createRuntimeJson))
+    {
+        logError("createRuntime is not array: %s", cJSON_Print(createRuntimeJson));
+        return NULL;
+    }
+
+    hooksConfig *hooks = (hooksConfig *)calloc(1, sizeof(hooksConfig));
+    hooks->createRuntime = (hookConfig *)calloc(n, sizeof(hookConfig));
+    hooks->createRuntimeLen = n;
+    hookConfig *hook = hooks->createRuntime;
+    cJSON *itemJson;
+    cJSON_ArrayForEach(itemJson, createRuntimeJson)
+    {
+        if (!cJSON_IsObject(itemJson))
+        {
+            logError("item is not object: %s", cJSON_Print(itemJson));
+            return NULL;
+        }
+        if (parseHook(itemJson, hook) < 0)
+        {
+            logError("item parse fail: %s", cJSON_Print(itemJson));
+            return NULL;
+        }
+        hook++;
+    }
+
+    return hooks;
+}
+
 static int parseNamespace(cJSON *json, namespaceConfig *namespace)
 {
     namespace->path = parseStr(json, "path");
@@ -344,6 +400,10 @@ containerConfig *parse()
         goto ERROR;
     }
     if ((config->mountslen = parseMountArray(rootJson, "mounts", &config->mounts)) < 0)
+    {
+        goto ERROR;
+    }
+    if ((config->hooks = parseHooks(rootJson, "hooks")) == NULL)
     {
         goto ERROR;
     }

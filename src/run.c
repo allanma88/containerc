@@ -16,7 +16,7 @@ int run()
     {
         return -1;
     }
-    // printConfig(cloneArgs.config);
+    // printConfig(cArgs->config);
     // return 0;
 
     return parentRun(cArgs);
