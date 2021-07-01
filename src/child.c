@@ -11,7 +11,7 @@
 #include <sys/syscall.h>
 #include <sys/wait.h>
 
-#include "cust_dir.h"
+#include "cdir.h"
 #include "config.h"
 #include "child.h"
 #include "cio.h"
@@ -147,6 +147,7 @@ static int runProcess(processConfig *process)
         logError("execute %s in child error", process->args[0]);
         return -1;
     }
+    return 0;
 }
 
 static int pivotRoot(const char *new_root, const char *put_old)
@@ -224,7 +225,7 @@ static int runRoot(rootConfig *root)
     return 0;
 }
 
-int childChildMain(void *arg)
+int grandChildMain(void *arg)
 {
     cloneArgs *cArgs = (struct cloneArgs *)arg;
     containerConfig *config = cArgs->config;
@@ -232,6 +233,11 @@ int childChildMain(void *arg)
     close(cArgs->sync_child_pipe[0]);
     close(cArgs->sync_child_pipe[1]);
     close(cArgs->sync_grandchild_pipe[1]);
+
+    if (runRoot(config->root) < 0)
+    {
+        return -1;
+    }
 
     if (cArgs->cloneFlags | CLONE_NEWNS)
     {
@@ -244,11 +250,6 @@ int childChildMain(void *arg)
     if (sethostname(config->hostname, strlen(config->hostname)) == -1)
     {
         logError("set hostname error");
-        return -1;
-    }
-
-    if (runRoot(config->root) < 0)
-    {
         return -1;
     }
 
@@ -276,7 +277,8 @@ int childChildMain(void *arg)
         return -1;
     }
 
-    printf("child child done\n");
+    printf("grand child done\n");
+    return 0;
 }
 
 int childMain(void *arg)
@@ -294,7 +296,7 @@ int childMain(void *arg)
         return -1;
     }
 
-    int grandChildPid = clone(childChildMain, child_stack + STACK_SIZE, (cloneFlags & ~CLONE_NEWUSER) | SIGCHLD, cArgs);
+    int grandChildPid = clone(grandChildMain, child_stack + STACK_SIZE, (cloneFlags & ~CLONE_NEWUSER) | SIGCHLD, cArgs);
     if (grandChildPid == -1)
     {
         logError("clone error");

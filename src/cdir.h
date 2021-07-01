@@ -1,5 +1,5 @@
-#ifndef __CUST_DIR_H
-#define __CUST_DIR_H
+#ifndef __CDIR_H
+#define __CDIR_H
 
 int mkdirRecur(const char *path);
 

@@ -3,15 +3,16 @@
 #include <unistd.h>
 #include <limits.h>
 #include <stdint.h>
-#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <fcntl.h>
 #include <string.h>
+#include <errno.h>
 #include <sys/wait.h>
 #include <sys/socket.h>
 
-#include "cust_dir.h"
+#include "cdir.h"
+#include "cstr.h"
 #include "config.h"
 #include "parent.h"
 #include "child.h"
@@ -97,12 +98,9 @@ static int updateIdMap(idMappingConfig *idMappings, int idMappingLen, char *map_
 static int updateSetgroups(pid_t child_pid, char *str)
 {
     char setgroups_path[PATH_MAX];
-    int fd;
-
     snprintf(setgroups_path, PATH_MAX, "/proc/%jd/setgroups", (intmax_t)child_pid);
-
-    fd = open(setgroups_path, O_RDWR);
-    if (fd == -1 && errno != ENOENT)
+    int fd = open(setgroups_path, O_RDWR);
+    if (fd == -1)
     {
         /* We may be on a system that doesn't support
         /proc/PID/setgroups. In that case, the file won't exist,
@@ -217,6 +215,60 @@ static int runCgroupNamespace(int childPid, linuxConfig *Linux)
     return 0;
 }
 
+static int executesh(char *path, char **args, int argc, char **envp)
+{
+    pid_t pid = fork();
+    if (pid == 0)
+    {
+        char *newargs[argc + 4];
+        newargs[0] = "sh";
+        newargs[1] = "-c";
+        newargs[2] = path;
+        newargs[argc + 3] = (char*)NULL;
+        for (int i = 0; i < argc; i++)
+        {
+            newargs[i + 3] = args[i];
+        }
+        if (execve("/bin/sh", newargs, envp) < 0)
+        {
+            logError("execve error");
+            return -1;
+        }
+    }
+    else
+    {
+        if (waitpid(pid, NULL, 0) < 0)
+        {
+            logError("wait pid error");
+            return -1;
+        }
+    }
+    return 0;
+}
+
+static int runHooks(hooksConfig *hooks, int grandChildPid)
+{
+    if (hooks != NULL && hooks->createRuntime != NULL)
+    {
+        for (int i = 0; i < hooks->createRuntimeLen; i++)
+        {
+            char *childPidEnv = format("ChildPid=%d", grandChildPid);
+            char *newEnv[hooks->createRuntime[i].envc + 2];
+            for (int i = 0; i < hooks->createRuntime[i].envc; i++)
+            {
+                newEnv[i] = hooks->createRuntime[i].env[i];
+            }
+            newEnv[hooks->createRuntime[i].envc] = childPidEnv;
+            newEnv[hooks->createRuntime[i].envc+1] = (char*)NULL;
+            if (executesh(hooks->createRuntime[i].path, hooks->createRuntime[i].args, hooks->createRuntime[i].argc, newEnv) < 0)
+            {
+                return -1;
+            }
+        }
+    }
+    return 0;
+}
+
 int parentRun(cloneArgs *cArgs)
 {
     cArgs->cloneFlags = computeCloneFlags(cArgs->config->Linux);
@@ -277,13 +329,9 @@ int parentRun(cloneArgs *cArgs)
         return -1;
     }
 
-    hooksConfig *hooks = cArgs->config->hooks;
-    if (hooks != NULL && hooks->createRuntime != NULL)
+    if (runHooks(cArgs->config->hooks, grandChildPid) < 0)
     {
-        for (int i = 0; i < hooks->createRuntimeLen; i++)
-        {
-            system(hooks->createRuntime[i].path);
-        }
+        return -1;
     }
 
     if (writeInt1(cArgs->sync_grandchild_pipe[1], CREATERUNTIMERESP) < 0)

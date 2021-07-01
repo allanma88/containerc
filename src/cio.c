@@ -46,7 +46,6 @@ int readInt1(int fd)
     return i;
 }
 
-
 char *readtoend(char *path, char *modes)
 {
     FILE *f = fopen(path, modes);

@@ -6,7 +6,7 @@
 #include <dirent.h>
 #include <sys/stat.h>
 
-#include "cust_dir.h"
+#include "cdir.h"
 
 int mkdirRecur(const char *path)
 {
