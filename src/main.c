@@ -3,9 +3,10 @@
 #include <unistd.h>
 #include <stdlib.h>
 
+#include "log.h"
 #include "run.h"
 #include "help.h"
-#include "log.h"
+#include "pull.h"
 
 int main(int argc, char **argv)
 {
@@ -31,6 +32,15 @@ int main(int argc, char **argv)
             }
         }
         run();
+    }
+    else if (!strncmp(argv[1], "pull", 4))
+    {
+        if (argc < 3)
+        {
+            help();
+            return 0;
+        }
+        pull(argv[2]);
     }
     else
     {

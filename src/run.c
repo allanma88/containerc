@@ -2,7 +2,7 @@
 #include <stdlib.h>
 
 #include "config.h"
-#include "parser.h"
+#include "deserializer.h"
 #include "print.h"
 #include "parent.h"
 #include "run.h"
@@ -11,7 +11,7 @@ int run()
 {
     cloneArgs *cArgs = (cloneArgs*)malloc(sizeof(cloneArgs));
     pid_t pid;
-    cArgs->config = parse();
+    cArgs->config = deserialize();
     if (cArgs->config == NULL)
     {
         return -1;

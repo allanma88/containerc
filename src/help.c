@@ -3,5 +3,5 @@
 
 void help()
 {
-    // printf("ctrc run");
+    printf("ctrc run\n");
 }

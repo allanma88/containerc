@@ -3,4 +3,6 @@
 
 char *format(char *format, ...);
 
+char *substr(char *s, char c);
+
 #endif

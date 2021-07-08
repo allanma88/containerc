@@ -108,4 +108,13 @@ typedef struct containerConfig
 
 void freeConfig(containerConfig *config);
 
+typedef struct imageManifest
+{
+    char *config;
+    char **repoTags;
+    int repoTagLen;
+    char **layers;
+    int layerLen;
+} imageManifest;
+
 #endif
