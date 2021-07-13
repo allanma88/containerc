@@ -10,8 +10,6 @@
 
 int main(int argc, char **argv)
 {
-    int opt;
-    char *rootPath = NULL;
     if (argc < 2)
     {
         help();
@@ -20,18 +18,15 @@ int main(int argc, char **argv)
 
     if (!strncmp(argv[1], "run", 3))
     {
+        char *rootPath = NULL;
         if (argc > 2 && !strncmp(argv[2], "-r", 2))
         {
             if (argc > 3)
             {
                 rootPath = argv[3];
             }
-            if (rootPath != NULL)
-            {
-                chdir(rootPath);
-            }
         }
-        run();
+        run(rootPath);
     }
     else if (!strncmp(argv[1], "pull", 4))
     {

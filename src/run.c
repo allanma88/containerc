@@ -7,9 +7,14 @@
 #include "parent.h"
 #include "run.h"
 
-int run()
+int run(char *rootPath)
 {
-    cloneArgs *cArgs = (cloneArgs*)malloc(sizeof(cloneArgs));
+    if (rootPath != NULL)
+    {
+        chdir(rootPath);
+    }
+    
+    cloneArgs *cArgs = (cloneArgs *)malloc(sizeof(cloneArgs));
     pid_t pid;
     cArgs->config = deserialize();
     if (cArgs->config == NULL)

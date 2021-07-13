@@ -325,30 +325,30 @@ static int saveLayerJson(char *layerId, char *parentId, char *config)
 
         cJSON *hostnameJson = cJSON_CreateString("");
         cJSON_AddItemToObject(containerConfigJson, "Hostname", hostnameJson);
-        
+
         cJSON *domainnameJson = cJSON_CreateString("");
         cJSON_AddItemToObject(containerConfigJson, "Domainname", domainnameJson);
-        
+
         cJSON *userJson = cJSON_CreateString("");
         cJSON_AddItemToObject(containerConfigJson, "User", userJson);
-        
+
         cJSON *attachStdinJson = cJSON_CreateBool(cJSON_False);
         cJSON_AddItemToObject(containerConfigJson, "AttachStdin", attachStdinJson);
-        
+
         cJSON *attachStdoutJson = cJSON_CreateBool(cJSON_False);
         cJSON_AddItemToObject(containerConfigJson, "AttachStdout", attachStdoutJson);
-        
+
         cJSON *attachStderrJson = cJSON_CreateBool(cJSON_False);
         cJSON_AddItemToObject(containerConfigJson, "AttachStderr", attachStderrJson);
-        
+
         cJSON *openStdinJson = cJSON_CreateBool(cJSON_False);
         cJSON_AddItemToObject(containerConfigJson, "OpenStdin", openStdinJson);
-        
+
         cJSON *stdinOnceJson = cJSON_CreateBool(cJSON_False);
         cJSON_AddItemToObject(containerConfigJson, "StdinOnce", stdinOnceJson);
-        
+
         //TODO: add more
-        
+
         cJSON_AddItemToObject(rootJson, "container_config", containerConfigJson);
     }
     else
@@ -388,7 +388,7 @@ static int saveLayerJson(char *layerId, char *parentId, char *config)
     return 0;
 }
 
-static char *downloadConfig(char *image,  char *tag, char *configDigest)
+static char *downloadConfig(char *image, char *tag, char *configDigest)
 {
     char *configFilePath = getConfigFilePath(image, tag, configDigest);
     FILE *configFile = openFile(configFilePath);
@@ -428,7 +428,8 @@ static int downloadImage(char *image, char *tag, char *configManifest)
     cJSON_ArrayForEach(layerJson, layersJson)
     {
         char *layerDigest = parseStr(layerJson, "digest");
-        printf("downlaoding layed %s\n", layerDigest);
+        printf("downlaoding layer %s\n", layerDigest);
+
         layerId = hash(layerDigest, layerId);
         char *config = i == imgManifest.layerLen - 1 ? configContent : NULL;
         saveLayerJson(layerId, parentId, config);
@@ -439,6 +440,7 @@ static int downloadImage(char *image, char *tag, char *configManifest)
 
         free(token);
         fclose(layerFile);
+
         parentId = layerId;
         i++;
     }
