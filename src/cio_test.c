@@ -5,7 +5,7 @@
 #include <dirent.h>
 #include <sys/stat.h>
 
-#include "cust_dir.h"
+#include "cio.h"
 
 int main()
 {

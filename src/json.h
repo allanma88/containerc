@@ -2,6 +2,11 @@
 #define __JSON_H
 
 #include <cjson/cJSON.h>
+#include "config.h"
+
+containerConfig *deserialize();
+
+char *serialize(imageManifest *manifest);
 
 int parseBool(cJSON *json, char *path);
 

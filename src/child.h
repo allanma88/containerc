@@ -1,6 +1,8 @@
 #ifndef __CHILD_H
 #define __CHILD_H
 
+#include "config.h"
+
 typedef struct cloneArgs
 {
     containerConfig *config;

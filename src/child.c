@@ -11,9 +11,9 @@
 #include <sys/syscall.h>
 #include <sys/wait.h>
 
-#include "cdir.h"
-#include "config.h"
 #include "child.h"
+#include "cio.h"
+#include "config.h"
 #include "cio.h"
 #include "log.h"
 

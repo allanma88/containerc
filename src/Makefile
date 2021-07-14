@@ -1,4 +1,4 @@
-objects = config.o cdir.o cstr.o print.o cio.o log.o json.o deserializer.o serializer.o child.o parent.o run.o help.o pull.o main.o
+objects = cstr.o cio.o log.o json.o path.o print.o config.o child.o parent.o run.o help.o pull.o main.o
 ctrc : $(objects)
 	cc $(objects) -o ctrc -lcjson -lcurl -lgcrypt
 
@@ -23,17 +23,11 @@ child.o: child.c
 config.o: config.c
 	cc -c -g config.c
 
-deserializer.o: deserializer.c
-	cc -c -g deserializer.c
-
-serializer.o: serializer.c
-	cc -c -g serializer.c
-
 print.o: print.c
 	cc -c -g print.c
 
-cdir.o: cdir.c
-	cc -c -g cdir.c
+path.o: path.c
+	cc -c -g path.c
 
 cstr.o: cstr.c
 	cc -c -g cstr.c

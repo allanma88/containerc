@@ -11,7 +11,6 @@
 #include <sys/wait.h>
 #include <sys/socket.h>
 
-#include "cdir.h"
 #include "cstr.h"
 #include "config.h"
 #include "parent.h"

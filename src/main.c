@@ -18,15 +18,17 @@ int main(int argc, char **argv)
 
     if (!strncmp(argv[1], "run", 3))
     {
-        char *rootPath = NULL;
-        if (argc > 2 && !strncmp(argv[2], "-r", 2))
+        char *image = NULL;
+        char *entrypoint = NULL;
+        if (argc > 2)
         {
-            if (argc > 3)
-            {
-                rootPath = argv[3];
-            }
+            image = argv[2];
         }
-        run(rootPath);
+        if (argc > 3)
+        {
+            image = argv[3];
+        }
+        run(image, entrypoint);
     }
     else if (!strncmp(argv[1], "pull", 4))
     {
