@@ -2,7 +2,7 @@
 
 Container_Ip=10.1.1.2/16 # need an dynamic container ip
 Container_BrIp=10.1.255.255
-Container_Root=/mnt/d/OpenSource/containerc/src/mycontainer/rootfs # need get from env
+Container_Root=$ContainerBase/rootfs
 VETHNAME=veth$ChildPid
 
 result=$(ip link show br0 &> /dev/null)

@@ -220,7 +220,7 @@ static int parseIdMapping(cJSON *json, idMappingConfig *idMapping)
     //TODO: error handler?
     idMapping->containerId = parseInt(json, "containerID");
     idMapping->hostId = parseInt(json, "hostID");
-    idMapping->size = parseInt(json, "size");
+    idMapping->size = parseLong(json, "size");
     return 0;
 }
 
@@ -304,14 +304,8 @@ static linuxConfig *parseLinux(cJSON *json, char *path)
     return Linux;
 }
 
-containerConfig *deserialize()
+containerConfig *deserialize(char *string)
 {
-    char *string = readtoend("config.json", "rb");
-    if (string == NULL)
-    {
-        logError("read config error");
-        return NULL;
-    }
     cJSON *rootJson = cJSON_Parse(string);
     // char *output = cJSON_Print(json);
     // printf("%s\n", output);
@@ -430,6 +424,17 @@ int parseInt(cJSON *json, char *path)
         return -1;
     }
     return intJson->valueint;
+}
+
+long parseLong(cJSON *json, char *path)
+{
+    cJSON *longJson = cJSON_GetObjectItemCaseSensitive(json, path);
+    if (!cJSON_IsNumber(longJson))
+    {
+        //problem
+        return -1;
+    }
+    return (long)longJson->valuedouble;
 }
 
 int parseBool(cJSON *json, char *path)

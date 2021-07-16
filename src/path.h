@@ -9,4 +9,16 @@ char *getLayerTarFilePath(char *layerId);
 
 char *getLayerJsonFilePath(char *layerId);
 
+char *getRuntimeLayerPath(char *layerId);
+
+char *getRuntimeConfigFilePath(char *layerId);
+
+char *getContainerBasePath(char *containerId);
+
+char *getContainerRootfsPath(char *containerId);
+
+char *getContainerLayerPath(char *containerId);
+
+char *getContainerWorkerPath(char *containerId);
+
 #endif

@@ -16,19 +16,48 @@ int main(int argc, char **argv)
         return 0;
     }
 
-    if (!strncmp(argv[1], "run", 3))
+    if (!strncmp(argv[1], "run", 3) && argc > 2)
     {
-        char *image = NULL;
+        char *rootPath = NULL;
+        char *imageAddr = NULL;
         char *entrypoint = NULL;
-        if (argc > 2)
+
+        if (!strncmp(argv[2], "-r", 2))
         {
-            image = argv[2];
+            if (argc > 3)
+            {
+                rootPath = argv[3];
+            }
+            return run(rootPath);
         }
-        if (argc > 3)
+        else
         {
-            image = argv[3];
+            imageAddr = argv[2];
+            if (argc > 3)
+            {
+                entrypoint = argv[3];
+            }
+            char *image = strtok(imageAddr, ":");
+            char *tag = strtok(NULL, ":");
+            if (image == NULL)
+            {
+                help();
+                return 0;
+            }
+            if (tag == NULL)
+            {
+                tag = "latest";
+            }
+            char *containerId = run1(image, tag, entrypoint);
+            if (containerId == NULL)
+            {
+                logError("run error");
+            }
+            else
+            {
+                printf("%s started\n", containerId);
+            }
         }
-        run(image, entrypoint);
     }
     else if (!strncmp(argv[1], "pull", 4))
     {
@@ -37,11 +66,11 @@ int main(int argc, char **argv)
             help();
             return 0;
         }
-        pull(argv[2]);
+        return pull(argv[2]);
     }
     else
     {
-        logError("unkown command: %s", argv[1]);
+        help();
     }
     return 0;
 }

@@ -2,6 +2,7 @@
 
 #include "config.h"
 #include "print.h"
+#include "cstr.h"
 
 static void printProcessConfig(processConfig *process)
 {
@@ -28,14 +29,11 @@ static void printRootConfig(rootConfig *root)
 
 static void printMountsConfig(mountConfig *mounts, int mountsLen)
 {
+    printf("================Mounts============\n");
     for (int i = 0; i < mountsLen; i++)
     {
-        printf("destination=%s, type=%s, source=%s, options:\n", mounts[i].destination, mounts[i].type, mounts[i].source);
-        for (int j = 0; j < mounts[i].optionsLen; j++)
-        {
-            printf("%s ", mounts[i].options[j]);
-        }
-        printf("\n");
+        char *option = join1(" ", mounts[i].optionsLen, mounts[i].options);
+        printf("destination=%s, type=%s, source=%s, options: %s\n", mounts[i].destination, mounts[i].type, mounts[i].source, option);
     }
 }
 
@@ -53,7 +51,7 @@ static void printIdMappingsConfig(idMappingConfig *idMappings, int idMappingsLen
 {
     for (int i = 0; i < idMappingsLen; i++)
     {
-        printf("containerId=%d, hostId=%d, size=%d\n", idMappings[i].containerId, idMappings[i].hostId, idMappings[i].size);
+        printf("containerId=%d, hostId=%d, size=%ld\n", idMappings[i].containerId, idMappings[i].hostId, idMappings[i].size);
     }
 }
 

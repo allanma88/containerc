@@ -41,6 +41,13 @@ log.o: log.c
 json.o: json.c
 	cc -c -g json.c
 
+test.o: test.c
+	cc -c -g test.c
+
+test: test.o cstr.o config.o print.o
+	cc test.o cstr.o config.o print.o -o test -lgcrypt
+
 clean :
 	rm -f *.o
 	rm -f ctrc
+	rm -f test

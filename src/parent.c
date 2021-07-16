@@ -71,7 +71,7 @@ static int updateIdMap(idMappingConfig *idMappings, int idMappingLen, char *map_
     idMappingConfig *idMapping = idMappings;
     for (int i = 0; i < idMappingLen; i++)
     {
-        nums[i] = snprintf(NULL, 0, "%d %d %d\n", idMapping->containerId, idMapping->hostId, idMapping->size);
+        nums[i] = snprintf(NULL, 0, "%d %d %ld\n", idMapping->containerId, idMapping->hostId, idMapping->size);
         len += nums[i];
         idMapping++;
     }
@@ -81,7 +81,7 @@ static int updateIdMap(idMappingConfig *idMappings, int idMappingLen, char *map_
     idMapping = idMappings;
     for (int i = 0; i < idMappingLen; i++)
     {
-        snprintf(mapping + n, nums[i] + 1, "%d %d %d\n", idMapping->containerId, idMapping->hostId, idMapping->size);
+        snprintf(mapping + n, nums[i] + 1, "%d %d %ld\n", idMapping->containerId, idMapping->hostId, idMapping->size);
         n += nums[i];
         idMapping++;
     }
@@ -223,7 +223,7 @@ static int executesh(char *path, char **args, int argc, char **envp)
         newargs[0] = "sh";
         newargs[1] = "-c";
         newargs[2] = path;
-        newargs[argc + 3] = (char*)NULL;
+        newargs[argc + 3] = (char *)NULL;
         for (int i = 0; i < argc; i++)
         {
             newargs[i + 3] = args[i];
@@ -245,20 +245,23 @@ static int executesh(char *path, char **args, int argc, char **envp)
     return 0;
 }
 
-static int runHooks(hooksConfig *hooks, int grandChildPid)
+static int runHooks(hooksConfig *hooks, int grandChildPid, char *rootPath)
 {
     if (hooks != NULL && hooks->createRuntime != NULL)
     {
         for (int i = 0; i < hooks->createRuntimeLen; i++)
         {
+            int envc = hooks->createRuntime[i].envc;
             char *childPidEnv = format("ChildPid=%d", grandChildPid);
-            char *newEnv[hooks->createRuntime[i].envc + 2];
-            for (int i = 0; i < hooks->createRuntime[i].envc; i++)
+            char *containerBaseEnv = format("ContainerBase=%s", rootPath);
+            char *newEnv[envc + 3];
+            for (int j = 0; j < envc; j++)
             {
-                newEnv[i] = hooks->createRuntime[i].env[i];
+                newEnv[j] = hooks->createRuntime[i].env[j];
             }
-            newEnv[hooks->createRuntime[i].envc] = childPidEnv;
-            newEnv[hooks->createRuntime[i].envc+1] = (char*)NULL;
+            newEnv[envc] = childPidEnv;
+            newEnv[envc + 1] = containerBaseEnv;
+            newEnv[envc + 2] = (char *)NULL;
             if (executesh(hooks->createRuntime[i].path, hooks->createRuntime[i].args, hooks->createRuntime[i].argc, newEnv) < 0)
             {
                 return -1;
@@ -328,7 +331,7 @@ int parentRun(cloneArgs *cArgs)
         return -1;
     }
 
-    if (runHooks(cArgs->config->hooks, grandChildPid) < 0)
+    if (runHooks(cArgs->config->hooks, grandChildPid, cArgs->rootPath) < 0)
     {
         return -1;
     }

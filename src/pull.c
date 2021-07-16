@@ -12,6 +12,8 @@
 #include "json.h"
 #include "cio.h"
 #include "path.h"
+#include "log.h"
+#include "cstr.h"
 
 struct memory
 {
@@ -216,27 +218,6 @@ static char *getConfigDigest(char *manifests)
     return digest;
 }
 
-static char *hash(char *layerDigest, char *layerId)
-{
-    char buffer[strlen(layerDigest) + strlen(layerId) + 2];
-    sprintf(buffer, "%s\n%s", layerId, layerDigest);
-
-    int algo = GCRY_MD_SHA256;
-    unsigned int l = gcry_md_get_algo_dlen(algo); /* get digest length (used later to print the result) */
-    gcry_md_hd_t h;
-    gcry_md_open(&h, algo, GCRY_MD_FLAG_SECURE); /* initialise the hash context */
-    gcry_md_write(h, buffer, strlen(buffer));    /* hash some text */
-    unsigned char *x = gcry_md_read(h, algo);    /* get the result */
-
-    char *hash = (char *)calloc(l * 2 + 1, sizeof(char));
-    for (unsigned i = 0; i < l; i++)
-    {
-        sprintf(hash + i * 2, "%02x", x[i]); /* print the result */
-    }
-    gcry_md_close(h);
-    return hash;
-}
-
 static int saveManifest(char *image, char *tag, imageManifest *imgManifest)
 {
     char *content = serialize(imgManifest);
@@ -335,7 +316,8 @@ static int saveLayerJson(char *layerId, char *parentId, char *config)
 
 static char *downloadConfig(char *image, char *tag, char *configDigest)
 {
-    char *configFilePath = getConfigFilePath(image, tag, configDigest);
+    char *imageId = substr(configDigest, ':');
+    char *configFilePath = getConfigFilePath(image, tag, imageId);
     FILE *configFile = openFile(configFilePath);
     if (configFile != NULL)
     {
@@ -344,7 +326,16 @@ static char *downloadConfig(char *image, char *tag, char *configDigest)
         requestBlob(image, configDigest, token, configFile);
         fclose(configFile);
     }
-    return configFilePath;
+    char *config = calloc(strlen(imageId) + 5 + 1, sizeof(char));
+    sprintf(config, "%s.json", imageId);
+    return config;
+}
+
+static int extract(char *tarFile, char *destPath)
+{
+    char cmd[strlen(tarFile) + strlen(destPath) + 12 + 1];
+    sprintf(cmd, "tar -xf %s -C %s", tarFile, destPath);
+    return system(cmd);
 }
 
 static int downloadImage(char *image, char *tag, char *configManifest)
@@ -367,6 +358,8 @@ static int downloadImage(char *image, char *tag, char *configManifest)
     cJSON *layerJson;
     char *layerId = "";
     char *parentId = NULL;
+    char *layerTarFilePath;
+    char *layer;
     imgManifest.layerLen = cJSON_GetArraySize(layersJson);
     imgManifest.layers = calloc(imgManifest.layerLen, sizeof(char *));
     int i = 0;
@@ -374,18 +367,29 @@ static int downloadImage(char *image, char *tag, char *configManifest)
     {
         char *layerDigest = parseStr(layerJson, "digest");
         printf("downlaoding layer %s\n", layerDigest);
-
-        layerId = hash(layerDigest, layerId);
+        
+        char buffer[strlen(layerDigest) + strlen(layerId) + 2];
+        sprintf(buffer, "%s\n%s", layerId, layerDigest);
+        layerId = hash(buffer);
         char *config = i == imgManifest.layerLen - 1 ? configContent : NULL;
         saveLayerJson(layerId, parentId, config);
-        imgManifest.layers[i] = getLayerTarFilePath(layerId);
-        FILE *layerFile = openFile(imgManifest.layers[i]);
+        layerTarFilePath = getLayerTarFilePath(layerId);
+        FILE *layerTarFile = openFile(layerTarFilePath);
         token = requestToken(image);
-        requestBlob(image, layerDigest, token, layerFile);
+        requestBlob(image, layerDigest, token, layerTarFile);
 
+        layer = (char*)calloc(strlen(layerId) + 10 + 1, sizeof(char));
+        sprintf(layer, "%s/layer.tar", layerId);
+        imgManifest.layers[i] = layer;
+
+        fclose(layerTarFile);
+
+        char *runtimeLayerPath = getRuntimeLayerPath(layerId);
+        mkdirRecur(runtimeLayerPath);
+        extract(layerTarFilePath, runtimeLayerPath);
+        
         free(token);
-        fclose(layerFile);
-
+        free(layerTarFilePath);
         parentId = layerId;
         i++;
     }

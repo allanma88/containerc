@@ -40,7 +40,7 @@ typedef struct idMappingConfig
 {
     int containerId;
     int hostId;
-    int size;
+    long size;
 } idMappingConfig;
 
 typedef struct namespaceConfig
@@ -106,8 +106,6 @@ typedef struct containerConfig
     linuxConfig *Linux;
 } containerConfig;
 
-void freeConfig(containerConfig *config);
-
 typedef struct imageManifest
 {
     char *config;
@@ -116,5 +114,9 @@ typedef struct imageManifest
     char **layers;
     int layerLen;
 } imageManifest;
+
+void freeConfig(containerConfig *config);
+
+containerConfig *makeDefaultConfig();
 
 #endif
