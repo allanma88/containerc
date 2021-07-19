@@ -164,7 +164,7 @@ char *run1(char *image, char *tag, char *entrypoint)
     }
     containerConfig *config = makeDefaultConfig();
     cJSON *containerConfigJson = getImageConfigJson(image, tag);
-    // merge(config, containerConfigJson);
+    merge(config, containerConfigJson);
     if (runContainer(config, rootPath) < 0)
     {
         return NULL;

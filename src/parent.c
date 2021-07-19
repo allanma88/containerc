@@ -286,7 +286,7 @@ int parentRun(cloneArgs *cArgs)
         return -1;
     }
 
-    int childPid = clone(childMain, child_stack + STACK_SIZE, (cArgs->cloneFlags & CLONE_NEWUSER) | SIGCHLD, cArgs);
+    int childPid = clone(childMain, child_stack + STACK_SIZE, cArgs->cloneFlags & CLONE_NEWUSER | SIGCHLD, cArgs);
     if (childPid == -1)
     {
         logError("clone error");
@@ -295,14 +295,14 @@ int parentRun(cloneArgs *cArgs)
 
     close(cArgs->sync_child_pipe[0]);
 
-    if (cArgs->cloneFlags | CLONE_NEWUSER)
+    if (cArgs->cloneFlags & CLONE_NEWUSER)
     {
         if (runUserNamespace(childPid, cArgs->config) < 0)
         {
             return -1;
         }
     }
-    if (cArgs->cloneFlags | CLONE_NEWCGROUP)
+    if (cArgs->cloneFlags & CLONE_NEWCGROUP)
     {
         if (runCgroupNamespace(childPid, cArgs->config->Linux) < 0)
         {
