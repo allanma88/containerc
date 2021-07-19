@@ -123,7 +123,6 @@ static int runUser(userConfig *user)
     {
         logError("set euid error");
         return -1;
-
     }
     if (setgid(user->gid) < 0)
     {
@@ -141,10 +140,24 @@ static int runUser(userConfig *user)
 static int runProcess(processConfig *process)
 {
     chdir(process->cwd);
-    //todo: change to absolute path of exe
-    if (execve(process->args[0], process->args, process->env) < 0)
+    char *newargs[process->argc + 1];
+    for (int i = 0; i < process->argc; i++)
     {
-        logError("execute %s in child error", process->args[0]);
+        newargs[i] = process->args[i];
+    }
+    newargs[process->argc] = (char *)NULL;
+
+    char *newenv[process->envc + 1];
+    for (int i = 0; i < process->envc; i++)
+    {
+        newenv[i] = process->env[i];
+    }
+    newenv[process->envc] = (char *)NULL;
+
+    char *absPath = absExePath(newargs[0]);
+    if (execve(absPath, newargs, newenv) < 0)
+    {
+        logError("execute %s in child error", newargs[0]);
         return -1;
     }
     return 0;
@@ -241,7 +254,7 @@ int grandChildMain(void *arg)
 
     if (cArgs->cloneFlags | CLONE_NEWNS)
     {
-        if(runMountNamespace(config) < 0)
+        if (runMountNamespace(config) < 0)
         {
             return -1;
         }
@@ -253,7 +266,7 @@ int grandChildMain(void *arg)
         return -1;
     }
 
-    if(runUser(config->process->user) < 0)
+    if (runUser(config->process->user) < 0)
     {
         return -1;
     }
@@ -272,7 +285,7 @@ int grandChildMain(void *arg)
     }
     close(cArgs->sync_grandchild_pipe[0]);
 
-    if(runProcess(config->process) < 0)
+    if (runProcess(config->process) < 0)
     {
         return -1;
     }
@@ -295,7 +308,6 @@ int childMain(void *arg)
         logError("child read %d from sync_child_pipe is not PARENTOK", msg);
         return -1;
     }
-
     int grandChildPid = clone(grandChildMain, child_stack + STACK_SIZE, (cloneFlags & ~CLONE_NEWUSER) | SIGCHLD, cArgs);
     if (grandChildPid == -1)
     {
@@ -319,7 +331,7 @@ int childMain(void *arg)
         logError("waitpid error");
         return -1;
     }
-
+    
     printf("child done\n");
     return 0;
 }

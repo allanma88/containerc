@@ -26,12 +26,12 @@ static char *makeRoot(char *image, char *tag, char *containerId)
     cJSON *layerJson;
     int n = cJSON_GetArraySize(layersJson);
     char *layerPaths[n];
-    int i = 0;
+    int i = n-1;
     cJSON_ArrayForEach(layerJson, layersJson)
     {
         char *layer = layerJson->valuestring;
         char *layerId = strtok(layer, "/");
-        layerPaths[i++] = getRuntimeLayerPath(layerId);
+        layerPaths[i--] = getRuntimeLayerPath(layerId);
     }
 
     char *containerImagePath = join1(":", n, layerPaths);
@@ -66,8 +66,7 @@ int run(char *rootPath)
     {
         return -1;
     }
-    char buffer[PATH_MAX];
-    char *realRootPath = realpath(rootPath, buffer);
+    char *realRootPath = absDirPath(rootPath);
     chdir(realRootPath);
 
     char *string = readtoend("config.json", "rb");
@@ -86,6 +85,71 @@ int run(char *rootPath)
     return runContainer(config, realRootPath);
 }
 
+static cJSON *getImageConfigJson(char *image, char *tag)
+{
+    char *manifestFilePath = getManifestFilePath(image, tag);
+    char *manifest = readtoend(manifestFilePath, "rb");
+    cJSON *manifestsJson = cJSON_Parse(manifest);
+    cJSON *manifestJson = cJSON_GetArrayItem(manifestsJson, 0);
+    char *configVal = parseStr(manifestJson, "Config");
+    char *configDigest = strtok(configVal, ".");
+    char *configFilePath = getConfigFilePath(image, tag, configDigest);
+    char *config = readtoend(configFilePath, "rb");
+    cJSON *configJson = cJSON_Parse(config);
+    cJSON *containerConfigJson = cJSON_GetObjectItemCaseSensitive(configJson, "config");
+    return containerConfigJson;
+}
+
+static void merge(containerConfig *config, cJSON *containerConfigJson)
+{
+    char **env;
+    int envc = parseStrArray(containerConfigJson, "Env", &env);
+    if (envc > 0)
+    {
+        free(config->process->env);
+        config->process->env = env;
+        config->process->envc = envc;
+    }
+
+    char *cwd = parseStr(containerConfigJson, "WorkingDir");
+    if (cwd != NULL)
+    {
+        config->process->cwd = cwd;
+    }
+
+    char **entrypoint;
+    char **cmd;
+    int entrypointLen = parseStrArray(containerConfigJson, "Entrypoint", &entrypoint);
+    int cmdLen = parseStrArray(containerConfigJson, "Cmd", &cmd);
+    if (entrypointLen > 0 && cmdLen > 0)
+    {
+        free(config->process->args);
+        char **newargs = (char **)calloc(entrypointLen + cmdLen, sizeof(char *));
+        for (int i = 0; i < entrypointLen; i++)
+        {
+            newargs[i] = entrypoint[i];
+        }
+        for (int i = 0; i < cmdLen; i++)
+        {
+            newargs[entrypointLen + i] = cmd[i];
+        }
+        config->process->args = newargs;
+        config->process->argc = entrypointLen + cmdLen;
+    }
+    else if (entrypointLen > 0)
+    {
+        free(config->process->args);
+        config->process->args = entrypoint;
+        config->process->argc = entrypointLen;
+    }
+    else if (cmdLen > 0)
+    {
+        free(config->process->args);
+        config->process->args = cmd;
+        config->process->argc = cmdLen;
+    }
+}
+
 char *run1(char *image, char *tag, char *entrypoint)
 {
     char *containerId = randomstr();
@@ -99,6 +163,8 @@ char *run1(char *image, char *tag, char *entrypoint)
         return NULL;
     }
     containerConfig *config = makeDefaultConfig();
+    cJSON *containerConfigJson = getImageConfigJson(image, tag);
+    // merge(config, containerConfigJson);
     if (runContainer(config, rootPath) < 0)
     {
         return NULL;

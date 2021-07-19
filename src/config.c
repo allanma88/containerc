@@ -22,7 +22,7 @@ static processConfig *makeProcessConfig()
     process->argc = argc;
 
     int envc = 2;
-    char **env = calloc(envc, sizeof(char *));
+    char **env = (char **)calloc(envc, sizeof(char *));
     env[0] = "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
     env[1] = "TERM=xterm";
     process->envc = envc;

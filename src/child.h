@@ -9,6 +9,7 @@ typedef struct cloneArgs
     int cloneFlags;
     int sync_child_pipe[2]; /* Pipe used to synchronize parent and child */
     int sync_grandchild_pipe[2]; /* Pipe used to synchronize parent and grand child */
+    char *rootPath;
 } cloneArgs;
 
 int childMain(void *arg);

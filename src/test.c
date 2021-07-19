@@ -1,8 +1,24 @@
+#define _GNU_SOURCE
 #include <stdio.h>
 
 #include "cstr.h"
 #include "config.h"
 #include "print.h"
+#include "log.h"
+#include "cio.h"
+
+static void mkdirRecur_test()
+{
+    char *path = "./mycontainer/rootfs/dev/pts";
+    if (mkdirRecur(path) < 0)
+    {
+        logError("mkdirRecur %s error\n", path);
+    }
+    else
+    {
+        printf("mkdirRecur done\n");
+    }
+}
 
 static void randomstr_test()
 {
@@ -23,7 +39,7 @@ static void join_test()
 
     str = join(":", 1, "lower1/");
     printf("%s\n", str);
-    
+
     char *strs[2];
     strs[0] = "lower1/";
     strs[1] = "lower2/";
@@ -52,11 +68,19 @@ static void format_test()
     printf("containerBaseEnv: %s\n", containerBaseEnv);
 }
 
+static void absExePath_test()
+{
+    char *absPath = absExePath("sh");
+    printf("sh absolute path is %s\n", absPath);
+}
+
 int main(int argc, char **argv)
 {
+    // mkdirRecur_test();
     // randomstr_test();
     // hash_test();
     // join_test();
     // makeDefaultConfig_test();
-    format_test();
+    // format_test();
+    // absExePath_test();
 }

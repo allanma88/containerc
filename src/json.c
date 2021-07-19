@@ -408,7 +408,7 @@ int parseStrArray(cJSON *json, char *path, char ***strs)
 char *parseStr(cJSON *json, char *path)
 {
     cJSON *strJson = cJSON_GetObjectItemCaseSensitive(json, path);
-    if (!cJSON_IsString(strJson))
+    if (cJSON_IsNull(strJson) || !cJSON_IsString(strJson))
     {
         return NULL;
     }

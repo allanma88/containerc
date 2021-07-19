@@ -44,7 +44,6 @@ char *getRuntimeLayerPath(char *layerId)
     return runtimeLayerPath;
 }
 
-
 char *getRuntimeConfigFilePath(char *layerId)
 {
     char *layerJsonFile = (char *)calloc(PATH_MAX, sizeof(char));

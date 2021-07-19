@@ -19,4 +19,8 @@ char *getdir(char *path);
 
 FILE *openFile(char *path);
 
+char *absDirPath(char *dir);
+
+char *absExePath(char *exePath);
+
 #endif

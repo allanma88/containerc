@@ -1,13 +1,16 @@
+#define _GNU_SOURCE
 #define _FILE_OFFSET_BITS 64
 #include <fcntl.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
 #include <dirent.h>
+#include <limits.h>
 #include <errno.h>
 #include <sys/stat.h>
 
 #include "cio.h"
+#include "cstr.h"
 
 int writeInt(char *path, int i)
 {
@@ -137,4 +140,34 @@ FILE *openFile(char *path)
         return NULL;
     }
     return file;
+}
+
+char *absDirPath(char *dir)
+{
+    char buffer[PATH_MAX];
+    char *realPath = realpath(dir, buffer);
+    return realPath;
+}
+
+char *absExePath(char *exePath)
+{
+    if (strchr(exePath, '/') != NULL)
+    {
+        return absDirPath(exePath);
+    }
+
+    char *pathEnv = getenv("PATH");
+    char *dir = strtok(pathEnv, ":");
+    char *absPath;
+    struct stat st;
+    while (dir != NULL)
+    {
+        absPath = join("/", 2, dir, exePath);
+        if (stat(absPath, &st) == 0)
+        {
+            return absPath;
+        }
+        dir = strtok(NULL, ":");
+    }
+    return NULL;
 }
