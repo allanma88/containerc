@@ -44,6 +44,9 @@ test
 *.idb
 *.pdb
 
+#vscode settings
+.vscode/*
+
 # Kernel Module Compile Results
 *.mod*
 *.cmd
