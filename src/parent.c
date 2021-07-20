@@ -138,10 +138,19 @@ static int runUserNamespace(int childPid, containerConfig *config)
     }
     if (Linux->gidMappingsLen > 0)
     {
-        if (updateSetgroups(childPid, "deny") < 0)
+        uid_t euid;
+        if ((euid = geteuid()) < 0)
         {
             return -1;
         }
+        if (euid > 0)
+        {
+            if (updateSetgroups(childPid, "deny") < 0)
+            {
+                return -1;
+            }
+        }
+
         snprintf(map_path, PATH_MAX, "/proc/%jd/gid_map", (intmax_t)childPid);
         if (updateIdMap(Linux->gidMappings, Linux->gidMappingsLen, map_path) < 0)
         {

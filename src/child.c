@@ -252,7 +252,7 @@ int grandChildMain(void *arg)
         return -1;
     }
 
-    if (cArgs->cloneFlags | CLONE_NEWNS)
+    if (cArgs->cloneFlags & CLONE_NEWNS)
     {
         if (runMountNamespace(config) < 0)
         {
@@ -331,7 +331,7 @@ int childMain(void *arg)
         logError("waitpid error");
         return -1;
     }
-    
+
     printf("child done\n");
     return 0;
 }
