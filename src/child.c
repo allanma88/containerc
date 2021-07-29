@@ -299,16 +299,22 @@ int childMain(void *arg)
     cloneArgs *cArgs = (cloneArgs *)arg;
     containerConfig *config = cArgs->config;
     int cloneFlags = cArgs->cloneFlags;
-
     close(cArgs->sync_child_pipe[1]);
 
-    int msg;
-    if ((msg = readInt1(cArgs->sync_child_pipe[0])) != PARENTOK)
+    if (writeInt1(cArgs->sync_child_pipe[0], SYNCUSERREQ) < 0)
     {
-        logError("child read %d from sync_child_pipe is not PARENTOK", msg);
+        logError("child write SYNCUSERREQ to sync_child_pipe error");
         return -1;
     }
-    int grandChildPid = clone(grandChildMain, child_stack + STACK_SIZE, (cloneFlags & ~CLONE_NEWUSER) | SIGCHLD, cArgs);
+
+    int msg;
+    if ((msg = readInt1(cArgs->sync_child_pipe[0])) != SYNCUSERRESP)
+    {
+        logError("child read %d from sync_child_pipe is not SYNCUSERRESP", msg);
+        return -1;
+    }
+
+    int grandChildPid = clone(grandChildMain, child_stack + STACK_SIZE, cloneFlags & ~CLONE_NEWUSER | CLONE_PARENT | SIGCHLD, cArgs);
     if (grandChildPid == -1)
     {
         logError("clone error");
@@ -325,12 +331,6 @@ int childMain(void *arg)
     }
 
     close(cArgs->sync_child_pipe[0]);
-
-    if (waitpid(grandChildPid, NULL, 0) < 0)
-    {
-        logError("waitpid error");
-        return -1;
-    }
 
     printf("child done\n");
     return 0;

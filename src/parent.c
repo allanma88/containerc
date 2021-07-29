@@ -304,6 +304,13 @@ int parentRun(cloneArgs *cArgs)
 
     close(cArgs->sync_child_pipe[0]);
 
+    int msg;
+    if ((msg = readInt1(cArgs->sync_child_pipe[1])) != SYNCUSERREQ)
+    {
+        logError("parent read %d from sync_child_pipe is not SYNCUSERREQ", msg);
+        return -1;
+    }
+
     if (cArgs->cloneFlags & CLONE_NEWUSER)
     {
         if (runUserNamespace(childPid, cArgs->config) < 0)
@@ -319,9 +326,9 @@ int parentRun(cloneArgs *cArgs)
         }
     }
 
-    if (writeInt1(cArgs->sync_child_pipe[1], PARENTOK) < 0)
+    if (writeInt1(cArgs->sync_child_pipe[1], SYNCUSERRESP) < 0)
     {
-        logError("parent write PARENTOK to sync_child_pipe error");
+        logError("parent write SYNCUSERRESP to sync_child_pipe error");
         return -1;
     }
 
@@ -333,7 +340,6 @@ int parentRun(cloneArgs *cArgs)
     }
     close(cArgs->sync_grandchild_pipe[0]);
 
-    int msg;
     if ((msg = readInt1(cArgs->sync_grandchild_pipe[1])) != CREATERUNTIME)
     {
         logError("parent read %d from sync_grandchild_pipe is not CREATERUNTIME", msg);
@@ -354,10 +360,9 @@ int parentRun(cloneArgs *cArgs)
     close(cArgs->sync_child_pipe[1]);
     close(cArgs->sync_grandchild_pipe[1]);
 
-    if (waitpid(childPid, NULL, 0) == -1)
+    while (wait(0) > 0)
     {
-        logError("waitpid error");
-        return -1;
     }
+
     return 0;
 }

@@ -1,5 +1,8 @@
 #define _GNU_SOURCE
 #include <stdio.h>
+#include <sched.h>
+#include <unistd.h>
+#include <sys/wait.h>
 
 #include "cstr.h"
 #include "config.h"
@@ -74,8 +77,49 @@ static void absExePath_test()
     printf("sh absolute path is %s\n", absPath);
 }
 
+#define STACK_SIZE (1024 * 1024)
+char child_stack[STACK_SIZE];
+
+static int grandChildMain(void *arg)
+{
+    char *args[] = {"/usr/bin/sh", NULL};
+    if (execve("/usr/bin/sh", args, NULL) < 0)
+    {
+        logError("execute in grand child error");
+        return -1;
+    }
+    return 0;
+}
+
+static int childMain(void *arg)
+{
+    int grandChildPid = clone(grandChildMain, child_stack + STACK_SIZE, CLONE_PARENT | SIGCHLD, NULL);
+    if (grandChildPid == -1)
+    {
+        logError("clone error");
+        return -1;
+    }
+
+    return 0;
+}
+
+static int tty_test()
+{
+    int childPid = clone(childMain, child_stack + STACK_SIZE, SIGCHLD, NULL);
+    if (childPid == -1)
+    {
+        logError("clone error");
+        return -1;
+    }
+    while(wait(0) > 0)
+    {
+    }
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
+    tty_test();
     // mkdirRecur_test();
     // randomstr_test();
     // hash_test();

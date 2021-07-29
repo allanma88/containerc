@@ -1,9 +1,10 @@
 #ifndef __CONFIG_H
 #define __CONFIG_H
 
-#define PARENTOK 1
-#define CREATERUNTIME 2
-#define CREATERUNTIMERESP 3
+#define SYNCUSERREQ 1
+#define SYNCUSERRESP 2
+#define CREATERUNTIME 3
+#define CREATERUNTIMERESP 4
 
 typedef struct userConfig
 {
